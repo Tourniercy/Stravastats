@@ -1,43 +1,43 @@
-import NextAuth from "next-auth"
+import NextAuth, {Account, User} from "next-auth"
 import "next-auth/jwt"
 import Strava from "next-auth/providers/strava"
 
-
 declare module "next-auth" {
     interface Session {
-        accessToken?: string
+        user: any
+        account: any
+        profile: any
     }
 }
 
-declare module "next-auth/jwt" {
-    interface JWT {
-        accessToken?: string
-    }
-}
 
 export const { handlers, auth, signIn } = NextAuth({
     providers: [
-        Strava({ authorization: { params: { scope: "read_all" } } }),
+        Strava({ authorization: { params: { scope: "read_all" }, responseType: "code" } }),
     ],
     callbacks: {
-        authorized({ request, auth }) {
-            const { pathname } = request.nextUrl
-            if (pathname === "/middleware-example") return !!auth
-            return true
-        },
-        jwt({ token, trigger, session, account }) {
-            if (trigger === "update") token.name = session.user.name
-            if (account?.provider === "keycloak") {
-                return { ...token, accessToken: account.access_token }
+        async jwt({ token, user, account, profile }) {
+            if (user) {
+                token.user = user
+                token.account = account
+                token.profile = profile
             }
             return token
         },
         async session({ session, token }) {
-            if (token?.accessToken) {
-                session.accessToken = token.accessToken
-            }
+            session.user = token.user
+            session.account = token.account
+            session.profile = token.profile
             return session
         },
+        async signIn({ user, account, profile }) {
+            console.log(user, account, profile)
+            return true
+        },
+        authorized: async ({ auth }) => {
+            // Logged in users are authenticated, otherwise redirect to login page
+            return !!auth
+        },
     },
-});
 
+});

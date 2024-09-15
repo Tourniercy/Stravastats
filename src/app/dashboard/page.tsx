@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {auth} from "@/auth";
+import { auth } from "@/auth"
 
 async function getStravaStats(token: string) {
     const athleteResponse = await fetch('https://www.strava.com/api/v3/athlete', {
@@ -17,12 +17,7 @@ async function getStravaStats(token: string) {
 
 export default async function Dashboard() {
     const session = await auth()
-
-    if (!session?.user) {
-        return <div>Not authenticated</div>
-    }
-
-    const { athlete, stats } = await getStravaStats(session.account.access_token)
+    const { athlete, stats } = await getStravaStats(session!.account.access_token)
 
     return (
         <div className="min-h-screen bg-gradient-to-r from-orange-400 to-red-500 p-8">

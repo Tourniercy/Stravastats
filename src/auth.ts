@@ -5,13 +5,13 @@ import Strava from "next-auth/providers/strava";
 
 declare module "next-auth" {
 	interface Session {
-		user: CustomUser;
+		user: StravaUser;
 		account: Account;
 		profile: Profile;
 	}
 }
 
-type CustomUser = AdapterUser & {
+type StravaUser = AdapterUser & {
 	emailVerified: Date | null;
 	isEmailVerified: boolean;
 };
@@ -19,7 +19,10 @@ type CustomUser = AdapterUser & {
 export const { handlers, auth, signIn } = NextAuth({
 	providers: [
 		Strava({
-			authorization: { params: { scope: "read_all" }, responseType: "code" },
+			authorization: {
+				params: { scope: ["profile:read_all", "activity:read_all"] },
+				responseType: "code",
+			},
 		}),
 	],
 	callbacks: {

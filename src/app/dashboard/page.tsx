@@ -126,6 +126,7 @@ export default async function Dashboard() {
 					</Table>
 				</CardContent>
 			</Card>
+			<pre>{JSON.stringify(activities[0], null, 2)}</pre>
 		</div>
 	);
 }

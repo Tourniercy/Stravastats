@@ -58,3 +58,14 @@ model VerificationToken {
 
   @@id([identifier, token])
 }
+
+model Activities {
+  id              String   @id
+  name            String
+  type            String
+  distance        Int
+  movingTime      Int
+  averageSpeed    Float
+  averageHeartRate Float
+  date            DateTime
+}

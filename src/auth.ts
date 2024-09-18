@@ -27,7 +27,6 @@ export const { handlers, auth, signIn } = NextAuth({
 				responseType: "code",
 			},
 			profile(profile) {
-				console.log("profileT", profile);
 				return {
 					id: profile.id.toString(), // Convert id to string
 					name: profile.username,
@@ -37,27 +36,11 @@ export const { handlers, auth, signIn } = NextAuth({
 		}),
 	],
 	callbacks: {
-		async jwt({ token, user, account, profile }) {
-			console.log("jwt", token, user, account, profile);
-			if (user) {
-				token.user = user;
-				token.account = account;
-				token.profile = profile;
-			}
-			return token;
-		},
-		async session({ session, token }) {
-			const adapterUser = token.user as AdapterUser;
-			session.user = {
-				...adapterUser,
-				emailVerified: adapterUser.emailVerified,
-				isEmailVerified: adapterUser.emailVerified instanceof Date,
-			};
-			session.account = token.account as Account;
-			session.profile = token.profile as Profile;
+		async session({ session }) {
 			return session;
 		},
 		async signIn({ user, account, profile }) {
+			console.log("signIn", user, account, profile);
 			if (account?.provider === "strava") {
 				const stravaId = profile?.id;
 				user.email = `strava_${stravaId}@example.com`;

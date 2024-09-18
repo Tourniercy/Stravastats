@@ -9,124 +9,188 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { formatDate, formatDistance, formatDuration } from "@/lib/utils";
+import { prisma } from "../../../prisma"; // Make sure this import matches your project structure
 
-async function getStravaStats(token: string) {
-	const athleteResponse = await fetch("https://www.strava.com/api/v3/athlete", {
-		headers: { Authorization: `Bearer ${token}` },
+async function refreshStravaToken(userId: string) {
+	const account = await prisma.account.findFirst({
+		where: { provider: "strava", userId: userId },
 	});
-	const athleteData = await athleteResponse.json();
 
-	const statsResponse = await fetch(
-		`https://www.strava.com/api/v3/athletes/${athleteData.id}/stats`,
+	if (!account?.refresh_token) {
+		throw new Error("No refresh token found");
+	}
+	console.log(process.env.AUTH_STRAVA_ID);
+	try {
+		const response = await fetch("https://www.strava.com/api/v3/oauth/token", {
+			method: "POST",
+			body: JSON.stringify({
+				client_id: process.env.AUTH_STRAVA_ID,
+				client_secret: process.env.AUTH_STRAVA_SECRET,
+				grant_type: "refresh_token",
+				refresh_token: account.refresh_token,
+			}),
+		});
+
+		console.log(await response.json());
+
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		const data = await response.json();
+
+		const accessToken = data.access_token;
+		const refreshToken = data.refresh_token;
+
+		await prisma.account.update({
+			where: { provider: "strava", userId: userId },
+			data: {
+				access_token: accessToken,
+				refresh_token: refreshToken,
+			},
+		});
+
+		console.log(data);
+		return data;
+	} catch (error) {
+		console.error("Error:", error);
+	}
+}
+
+async function getStravaActivities(accessToken: string, userId: string) {
+	console.log("accessToken", accessToken);
+	const response = await fetch(
+		"https://www.strava.com/api/v3/athlete/activities?per_page=30",
 		{
-			headers: { Authorization: `Bearer ${token}` },
+			headers: {
+				Authorization: `Bearer ${accessToken}`,
+			},
 		},
 	);
-	const statsData = await statsResponse.json();
 
-	const activitiesResponse = await fetch(
-		`https://www.strava.com/api/v3/athletes/${athleteData.id}/activities`,
-		{
-			headers: { Authorization: `Bearer ${token}` },
-		},
+	if (!response.ok) {
+		await refreshStravaToken(userId);
+		// return await getStravaActivities(accessToken, userId);
+	}
+
+	return response.json();
+}
+
+async function getActivitiesFromDatabase(userId: string) {
+	return prisma.activity.findMany({
+		where: { userId: userId },
+		orderBy: { startDate: "desc" },
+		take: 30,
+	});
+}
+
+async function getStravaAccessTokenFromDatabase(userId: string) {
+	const account = await prisma.account.findFirst({
+		where: { userId: userId },
+	});
+	return account?.access_token;
+}
+
+async function storeActivitiesInDatabase(userId: string, activities: any[]) {
+	return Promise.all(
+		activities.map((activity) =>
+			prisma.activity.upsert({
+				where: { id: activity.id.toString() },
+				update: {
+					name: activity.name,
+					type: activity.type,
+					distance: activity.distance,
+					movingTime: activity.moving_time,
+					averageSpeed: activity.average_speed,
+					averageHeartrate: activity.average_heartrate,
+					startDate: new Date(activity.start_date),
+				},
+				create: {
+					id: activity.id.toString(),
+					userId: userId,
+					name: activity.name,
+					type: activity.type,
+					distance: activity.distance,
+					movingTime: activity.moving_time,
+					averageSpeed: activity.average_speed,
+					averageHeartrate: activity.average_heartrate,
+					startDate: new Date(activity.start_date),
+				},
+			}),
+		),
 	);
-	const activitiesData = await activitiesResponse.json();
-
-	return { athlete: athleteData, stats: statsData, activities: activitiesData };
 }
 
 export default async function Dashboard() {
 	const session = await auth();
-	const { athlete, stats, activities } = await getStravaStats(
-		session?.account?.access_token,
-	);
+	const userId = session?.user?.id;
+	const stravaAccessToken = await getStravaAccessTokenFromDatabase(userId);
+	let activities = [];
+
+	if (session?.user?.id) {
+		// First, try to get activities from the database
+		activities = await getActivitiesFromDatabase(session.user.id);
+
+		// If no activities in the database, fetch from Strava API and store them
+		console.log("activities", activities);
+		if (activities.length === 0 && stravaAccessToken) {
+			const stravaActivities = await getStravaActivities(
+				stravaAccessToken,
+				userId,
+			);
+
+			// Store activities in the database
+			activities = await storeActivitiesInDatabase(
+				session.user.id,
+				stravaActivities,
+			);
+		}
+	}
 
 	return (
 		<div className="min-h-screen bg-gradient-to-r from-orange-400 to-red-500 p-8">
 			<h1 className="text-4xl font-bold text-white mb-8">Your Strava Stats</h1>
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+			{session ? (
 				<Card>
 					<CardHeader>
-						<CardTitle>Profile</CardTitle>
+						<CardTitle>Recent Activities</CardTitle>
 					</CardHeader>
 					<CardContent>
-						<p>
-							Name: {athlete.firstname} {athlete.lastname}
-						</p>
-						<p>City: {athlete.city}</p>
-						<p>Country: {athlete.country}</p>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle>All-Time Stats</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<p>
-							Total Distance: {formatDistance(stats.all_run_totals.distance)}
-						</p>
-						<p>Total Runs: {stats.all_run_totals.count}</p>
-						<p>
-							Total Moving Time:{" "}
-							{formatDuration(stats.all_run_totals.moving_time)}
-						</p>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardHeader>
-						<CardTitle>Recent Stats (Last 4 Weeks)</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<p>
-							Recent Distance:{" "}
-							{formatDistance(stats.recent_run_totals.distance)}
-						</p>
-						<p>Recent Runs: {stats.recent_run_totals.count}</p>
-						<p>
-							Recent Moving Time:{" "}
-							{formatDuration(stats.recent_run_totals.moving_time)}
-						</p>
-					</CardContent>
-				</Card>
-			</div>
-			<Card>
-				<CardHeader>
-					<CardTitle>Recent Activities</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<Table>
-						<TableHeader>
-							<TableRow>
-								<TableHead>Date</TableHead>
-								<TableHead>Name</TableHead>
-								<TableHead>Type</TableHead>
-								<TableHead>Distance</TableHead>
-								<TableHead>Duration</TableHead>
-								<TableHead>Avg Speed</TableHead>
-								<TableHead>Avg HR</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{activities.map((activity) => (
-								<TableRow key={activity.id}>
-									<TableCell>{formatDate(activity.start_date)}</TableCell>
-									<TableCell>{activity.name}</TableCell>
-									<TableCell>{activity.type}</TableCell>
-									<TableCell>{formatDistance(activity.distance)}</TableCell>
-									<TableCell>{formatDuration(activity.moving_time)}</TableCell>
-									<TableCell>
-										{(activity.average_speed * 3.6).toFixed(2)} km/h
-									</TableCell>
-									<TableCell>
-										{activity.average_heartrate?.toFixed(0) || "N/A"}
-									</TableCell>
+						<Table>
+							<TableHeader>
+								<TableRow>
+									<TableHead>Date</TableHead>
+									<TableHead>Name</TableHead>
+									<TableHead>Type</TableHead>
+									<TableHead>Distance</TableHead>
+									<TableHead>Duration</TableHead>
+									<TableHead>Avg Speed</TableHead>
+									<TableHead>Avg HR</TableHead>
 								</TableRow>
-							))}
-						</TableBody>
-					</Table>
-				</CardContent>
-			</Card>
-			<pre>{JSON.stringify(activities[0], null, 2)}</pre>
+							</TableHeader>
+							<TableBody>
+								{activities.map((activity) => (
+									<TableRow key={activity.id}>
+										<TableCell>{formatDate(activity.startDate)}</TableCell>
+										<TableCell>{activity.name}</TableCell>
+										<TableCell>{activity.type}</TableCell>
+										<TableCell>{formatDistance(activity.distance)}</TableCell>
+										<TableCell>{formatDuration(activity.movingTime)}</TableCell>
+										<TableCell>
+											{(activity.averageSpeed * 3.6).toFixed(2)} km/h
+										</TableCell>
+										<TableCell>
+											{activity.averageHeartrate?.toFixed(0) || "N/A"}
+										</TableCell>
+									</TableRow>
+								))}
+							</TableBody>
+						</Table>
+					</CardContent>
+				</Card>
+			) : (
+				<div>Please sign in to view your Strava stats</div>
+			)}
 		</div>
 	);
 }

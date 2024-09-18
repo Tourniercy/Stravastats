@@ -8,13 +8,14 @@ generator client {
 }
 
 model User {
-  id            String          @id @default(cuid())
+  id            String       @id @default(cuid())
   name          String?
-  email         String          @unique
+  email         String       @unique
   emailVerified DateTime?
   image         String?
   accounts      Account[]
   sessions      Session[]
+  activities    Activity[] // Add this line
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -59,13 +60,18 @@ model VerificationToken {
   @@id([identifier, token])
 }
 
-model Activities {
-  id              String   @id
-  name            String
-  type            String
-  distance        Int
-  movingTime      Int
-  averageSpeed    Float
-  averageHeartRate Float
-  date            DateTime
+model Activity {
+  id               String   @id
+  userId           String   // Add this line
+  name             String
+  type             String
+  distance         Float    // Changed from Int to Float
+  movingTime       Int
+  averageSpeed     Float
+  averageHeartrate Float?   // Made optional and renamed to match Strava API
+  startDate        DateTime // Renamed from 'date' to match Strava API
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

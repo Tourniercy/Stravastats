@@ -14,24 +14,28 @@ import { prisma } from "../../../prisma"; // Make sure this import matches your 
 async function refreshStravaToken(userId: string) {
 	const account = await prisma.account.findFirst({
 		where: { provider: "strava", userId: userId },
+		select: { providerAccountId: true, refresh_token: true },
 	});
 
 	if (!account?.refresh_token) {
 		throw new Error("No refresh token found");
 	}
-	console.log(process.env.AUTH_STRAVA_ID);
+
 	try {
 		const response = await fetch("https://www.strava.com/api/v3/oauth/token", {
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
 			method: "POST",
-			body: JSON.stringify({
-				client_id: process.env.AUTH_STRAVA_ID,
-				client_secret: process.env.AUTH_STRAVA_SECRET,
+			body: new URLSearchParams({
+				// biome-ignore lint/style/noNonNullAssertion: <explanation>
+				client_id: process.env.AUTH_STRAVA_ID!,
+				// biome-ignore lint/style/noNonNullAssertion: <explanation>
+				client_secret: process.env.AUTH_STRAVA_SECRET!,
 				grant_type: "refresh_token",
 				refresh_token: account.refresh_token,
 			}),
 		});
-
-		console.log(await response.json());
 
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
@@ -43,7 +47,12 @@ async function refreshStravaToken(userId: string) {
 		const refreshToken = data.refresh_token;
 
 		await prisma.account.update({
-			where: { provider: "strava", userId: userId },
+			where: {
+				provider_providerAccountId: {
+					provider: "strava",
+					providerAccountId: account.providerAccountId,
+				},
+			},
 			data: {
 				access_token: accessToken,
 				refresh_token: refreshToken,
@@ -56,11 +65,9 @@ async function refreshStravaToken(userId: string) {
 		console.error("Error:", error);
 	}
 }
-
 async function getStravaActivities(accessToken: string, userId: string) {
-	console.log("accessToken", accessToken);
 	const response = await fetch(
-		"https://www.strava.com/api/v3/athlete/activities?per_page=30",
+		"https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1",
 		{
 			headers: {
 				Authorization: `Bearer ${accessToken}`,
@@ -69,8 +76,8 @@ async function getStravaActivities(accessToken: string, userId: string) {
 	);
 
 	if (!response.ok) {
-		await refreshStravaToken(userId);
-		// return await getStravaActivities(accessToken, userId);
+		// await refreshStravaToken(userId);
+		return await getStravaActivities(accessToken, userId);
 	}
 
 	return response.json();

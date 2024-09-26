@@ -26,8 +26,7 @@ export function formatDuration(seconds: number): string {
 	return `${remainingSeconds}s`;
 }
 
-export function formatDate(dateString: string): string {
-	const date = new Date(dateString);
+export function formatDate(date: Date): string {
 	return format(date, "MMM d, yyyy");
 }
 

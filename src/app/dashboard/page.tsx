@@ -8,14 +8,13 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { getAccount, updateUserStravaTokens } from "@/lib/account";
+import { getUserActivities } from "@/lib/activity";
 import { formatDate, formatDistance, formatDuration } from "@/lib/utils";
 import { prisma } from "../../../prisma"; // Make sure this import matches your project structure
 
 async function refreshStravaToken(userId: string) {
-	const account = await prisma.account.findFirst({
-		where: { provider: "strava", userId: userId },
-		select: { providerAccountId: true, refresh_token: true },
-	});
+	const account = await getAccount(userId);
 
 	if (!account?.refresh_token) {
 		throw new Error("No refresh token found");
@@ -46,34 +45,35 @@ async function refreshStravaToken(userId: string) {
 		const accessToken = data.access_token;
 		const refreshToken = data.refresh_token;
 
-		await prisma.account.update({
-			where: {
-				provider_providerAccountId: {
-					provider: "strava",
-					providerAccountId: account.providerAccountId,
-				},
-			},
-			data: {
-				access_token: accessToken,
-				refresh_token: refreshToken,
-			},
-		});
+		await updateUserStravaTokens(
+			accessToken,
+			refreshToken,
+			account.providerAccountId,
+		);
 
-		console.log(data);
 		return data;
 	} catch (error) {
 		console.error("Error:", error);
 	}
 }
-async function getStravaActivities(accessToken: string, userId: string) {
-	const response = await fetch(
-		"https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1",
-		{
-			headers: {
-				Authorization: `Bearer ${accessToken}`,
-			},
+async function getStravaActivities(
+	accessToken: string,
+	userId: string,
+	lastActivityDate?: Date,
+) {
+	let url = "";
+	if (lastActivityDate) {
+		const lastActivityTimestamp = lastActivityDate.getTime();
+		url = `https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1&after=${lastActivityTimestamp}`;
+	} else {
+		url =
+			"https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1";
+	}
+	const response = await fetch(url, {
+		headers: {
+			Authorization: `Bearer ${accessToken}`,
 		},
-	);
+	});
 
 	if (!response.ok) {
 		// await refreshStravaToken(userId);
@@ -81,21 +81,6 @@ async function getStravaActivities(accessToken: string, userId: string) {
 	}
 
 	return response.json();
-}
-
-async function getActivitiesFromDatabase(userId: string) {
-	return prisma.activity.findMany({
-		where: { userId: userId },
-		orderBy: { startDate: "desc" },
-		take: 30,
-	});
-}
-
-async function getStravaAccessTokenFromDatabase(userId: string) {
-	const account = await prisma.account.findFirst({
-		where: { userId: userId },
-	});
-	return account?.access_token;
 }
 
 async function storeActivitiesInDatabase(userId: string, activities: any[]) {
@@ -130,29 +115,32 @@ async function storeActivitiesInDatabase(userId: string, activities: any[]) {
 
 export default async function Dashboard() {
 	const session = await auth();
-	const userId = session?.user?.id;
-	const stravaAccessToken = await getStravaAccessTokenFromDatabase(userId);
-	let activities = [];
+	const userId = session?.user.id as string;
+	const account = await getAccount(userId);
+	const activities = await getUserActivities(userId);
 
-	if (session?.user?.id) {
-		// First, try to get activities from the database
-		activities = await getActivitiesFromDatabase(session.user.id);
+	const data = await refreshStravaToken(userId);
+	const stravaActivities = await getStravaActivities(
+		data.access_token,
+		userId,
+		activities?.[0]?.startDate,
+	);
 
-		// If no activities in the database, fetch from Strava API and store them
-		console.log("activities", activities);
-		if (activities.length === 0 && stravaAccessToken) {
-			const stravaActivities = await getStravaActivities(
-				stravaAccessToken,
-				userId,
-			);
-
-			// Store activities in the database
-			activities = await storeActivitiesInDatabase(
-				session.user.id,
-				stravaActivities,
-			);
-		}
+	if (stravaActivities) {
+		await storeActivitiesInDatabase(userId, stravaActivities);
 	}
+
+	// If no activities in the database, fetch from Strava API and store them
+	// console.log("activities", activities);
+	// if (activities.length === 0 && stravaAccessToken) {
+	// 	const stravaActivities = await getStravaActivities(
+	// 		stravaAccessToken,
+	// 		userId,
+	// 	);
+	//
+	// 	// Store activities in the database
+	// 	activities = await storeActivitiesInDatabase(userId, stravaActivities);
+	// }
 
 	return (
 		<div className="min-h-screen bg-gradient-to-r from-orange-400 to-red-500 p-8">

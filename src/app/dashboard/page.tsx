@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/table";
 import { getAccount, updateUserStravaTokens } from "@/lib/account";
 import { getDetailedActivity, getUserActivities } from "@/lib/activity";
-import { formatDate, formatDistance, formatDuration } from "@/lib/utils";
+import { formatDate, formatDistanceInKm, formatDuration } from "@/lib/utils";
 import type { Activity } from "@prisma/client";
 import { prisma } from "../../../prisma"; // Make sure this import matches your project structure
 
@@ -37,10 +37,6 @@ async function refreshStravaToken(userId: string) {
 			}),
 		});
 
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
-		}
-
 		const data = await response.json();
 
 		const accessToken = data.access_token;
@@ -52,7 +48,7 @@ async function refreshStravaToken(userId: string) {
 			account.providerAccountId,
 		);
 
-		return data;
+		return { ...data, stravaUserId: account.providerAccountId };
 	} catch (error) {
 		console.error("Error:", error);
 	}
@@ -62,7 +58,7 @@ async function getStravaActivities(
 	userId: string,
 	lastActivityDate?: Date,
 ) {
-	let url = "";
+	let url: string;
 	if (lastActivityDate) {
 		const lastActivityTimestamp = lastActivityDate.getTime();
 		url = `https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1&after=${lastActivityTimestamp}`;
@@ -84,8 +80,6 @@ async function getStravaActivities(
 	return response.json();
 }
 
-async function getDetailedActivities() {}
-
 async function storeActivitiesInDatabase(
 	userId: string,
 	activities: SummaryActivity[],
@@ -101,7 +95,8 @@ async function storeActivitiesInDatabase(
 					movingTime: activity.moving_time,
 					averageSpeed: activity.average_speed,
 					averageHeartrate: activity.average_heartrate,
-					startDate: new Date(activity.start_date),
+					elapsedTime: activity.elapsed_time,
+					startDate: new Date(activity.start_date_local),
 				},
 				create: {
 					id: activity.id.toString(),
@@ -112,7 +107,8 @@ async function storeActivitiesInDatabase(
 					movingTime: activity.moving_time,
 					averageSpeed: activity.average_speed,
 					averageHeartrate: activity.average_heartrate,
-					startDate: new Date(activity.start_date),
+					elapsedTime: activity.elapsed_time,
+					startDate: new Date(activity.start_date_local),
 				},
 			}),
 		),
@@ -122,14 +118,15 @@ async function storeActivitiesInDatabase(
 export default async function Dashboard() {
 	const session = await auth();
 	const userId = session?.user.id as string;
-	const account = await getAccount(userId);
+
 	let activities = await getUserActivities(userId);
 
 	const data = await refreshStravaToken(userId);
 	const accessToken = data.access_token;
+	const stravaUserId = data.stravaUserId;
 	const stravaActivities = await getStravaActivities(
 		accessToken,
-		userId,
+		stravaUserId,
 		activities?.[0]?.startDate,
 	);
 
@@ -203,7 +200,9 @@ export default async function Dashboard() {
 										<TableCell>{formatDate(activity.startDate)}</TableCell>
 										<TableCell>{activity.name}</TableCell>
 										<TableCell>{activity.type}</TableCell>
-										<TableCell>{formatDistance(activity.distance)}</TableCell>
+										<TableCell>
+											{formatDistanceInKm(activity.distance)}
+										</TableCell>
 										<TableCell>{formatDuration(activity.movingTime)}</TableCell>
 										<TableCell>
 											{(activity.averageSpeed * 3.6).toFixed(2)} km/h

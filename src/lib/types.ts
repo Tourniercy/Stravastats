@@ -11,5 +11,10 @@ type SummaryActivity = {
 };
 
 type DetailedActivity = SummaryActivity & {
-	any;
+	best_efforts: [
+		{
+			name: string;
+			elapsed_time: number;
+		},
+	];
 };

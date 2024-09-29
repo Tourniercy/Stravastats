@@ -75,6 +75,7 @@ model Activity {
   tenKm            String?
   halfMarathon     String?
   marathon         String?
+  detailedActivity Boolean @default(false)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

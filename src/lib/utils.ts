@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 import { format, formatDistanceToNow } from "date-fns";
 
-export function formatDistance(meters: number): string {
+export function formatDistanceInKm(meters: number): string {
 	const kilometers = meters / 1000;
 	return `${kilometers.toFixed(2)} km`;
 }

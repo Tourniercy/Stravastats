@@ -9,8 +9,9 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { getAccount, updateUserStravaTokens } from "@/lib/account";
-import { getUserActivities } from "@/lib/activity";
+import { getDetailedActivity, getUserActivities } from "@/lib/activity";
 import { formatDate, formatDistance, formatDuration } from "@/lib/utils";
+import type { Activity } from "@prisma/client";
 import { prisma } from "../../../prisma"; // Make sure this import matches your project structure
 
 async function refreshStravaToken(userId: string) {
@@ -83,7 +84,12 @@ async function getStravaActivities(
 	return response.json();
 }
 
-async function storeActivitiesInDatabase(userId: string, activities: any[]) {
+async function getDetailedActivities() {}
+
+async function storeActivitiesInDatabase(
+	userId: string,
+	activities: SummaryActivity[],
+) {
 	return Promise.all(
 		activities.map((activity) =>
 			prisma.activity.upsert({
@@ -117,17 +123,45 @@ export default async function Dashboard() {
 	const session = await auth();
 	const userId = session?.user.id as string;
 	const account = await getAccount(userId);
-	const activities = await getUserActivities(userId);
+	let activities = await getUserActivities(userId);
 
 	const data = await refreshStravaToken(userId);
+	const accessToken = data.access_token;
 	const stravaActivities = await getStravaActivities(
-		data.access_token,
+		accessToken,
 		userId,
 		activities?.[0]?.startDate,
 	);
 
 	if (stravaActivities) {
 		await storeActivitiesInDatabase(userId, stravaActivities);
+	}
+
+	activities = await getUserActivities(userId);
+
+	// Function to process activities in batches
+	async function processActivitiesBatch(batch: Activity[]) {
+		const detailedActivities = await Promise.all(
+			batch.map(async (activity) => {
+				if (!activity.detailedActivity) {
+					return getDetailedActivity(activity.id, accessToken);
+				}
+				return null;
+			}),
+		);
+
+		const filteredActivities = detailedActivities.filter(
+			(activity) => activity !== null && activity !== undefined,
+		);
+
+		await storeActivitiesInDatabase(userId, filteredActivities);
+	}
+
+	// Process activities in batches of 20
+	const batchSize = 20;
+	for (let i = 0; i < activities.length; i += batchSize) {
+		const batch = activities.slice(i, i + batchSize);
+		await processActivitiesBatch(batch);
 	}
 
 	// If no activities in the database, fetch from Strava API and store them

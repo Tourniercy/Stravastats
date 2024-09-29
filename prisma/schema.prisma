@@ -65,13 +65,14 @@ model Activity {
   userId           String   // Add this line
   name             String
   type             String
+  elapsedTime      Int
   distance         Float    // Changed from Int to Float
   movingTime       Int
   averageSpeed     Float
   averageHeartrate Float?   // Made optional and renamed to match Strava API
   startDate        DateTime // Renamed from 'date' to match Strava API
   oneKm            String?
-  fivekm           String?
+  fiveKm           String?
   tenKm            String?
   halfMarathon     String?
   marathon         String?

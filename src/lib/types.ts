@@ -1,4 +1,4 @@
-type SummaryActivity = {
+export type SummaryActivity = {
 	id: number;
 	name: string;
 	type: string;
@@ -10,11 +10,13 @@ type SummaryActivity = {
 	start_date_local: string;
 };
 
-type DetailedActivity = SummaryActivity & {
+export type BestEffort = {
+	name: string;
+	elapsed_time: number;
+}
+
+export type DetailedActivity = SummaryActivity & {
 	best_efforts: [
-		{
-			name: string;
-			elapsed_time: number;
-		},
+		BestEffort
 	];
 };

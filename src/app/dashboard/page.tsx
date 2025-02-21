@@ -10,9 +10,10 @@ import {
 } from "@/components/ui/table";
 import { getAccount, updateUserStravaTokens } from "@/lib/account";
 import { getDetailedActivity, getUserActivities } from "@/lib/activity";
+import type { SummaryActivity } from "@/lib/types";
 import { formatDate, formatDistanceInKm, formatDuration } from "@/lib/utils";
 import type { Activity } from "@prisma/client";
-import { prisma } from "../../../prisma"; // Make sure this import matches your project structure
+import { prisma } from "../../../prisma";
 
 async function refreshStravaToken(userId: string) {
 	const account = await getAccount(userId);

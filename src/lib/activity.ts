@@ -1,3 +1,4 @@
+import type { DetailedActivity, SummaryActivity } from "@/lib/types";
 import { prisma } from "../../prisma";
 
 export async function getUserActivities(userId: string) {
@@ -32,33 +33,29 @@ export async function storeSummaryActivities(
 	activities: SummaryActivity[],
 ) {
 	return Promise.all(
-		activities.map((activity) =>
-			prisma.activity.upsert({
-				where: { id: activity.id.toString() },
+		activities.map((stravaActivity) => {
+			const activity = {
+				name: stravaActivity.name,
+				type: stravaActivity.type,
+				distance: stravaActivity.distance,
+				movingTime: stravaActivity.moving_time,
+				elapsedTime: stravaActivity.elapsed_time,
+				averageSpeed: stravaActivity.average_speed,
+				averageHeartrate: stravaActivity.average_heartrate,
+				startDate: new Date(stravaActivity.start_date_local),
+			};
+			return prisma.activity.upsert({
+				where: { id: stravaActivity.id.toString() },
 				update: {
-					name: activity.name,
-					type: activity.type,
-					distance: activity.distance,
-					movingTime: activity.moving_time,
-					elapsedTime: activity.elapsed_time,
-					averageSpeed: activity.average_speed,
-					averageHeartrate: activity.average_heartrate,
-					startDate: new Date(activity.start_date_local),
+					...activity,
 				},
 				create: {
-					id: activity.id.toString(),
+					id: stravaActivity.id.toString(),
 					userId: userId,
-					name: activity.name,
-					type: activity.type,
-					distance: activity.distance,
-					movingTime: activity.moving_time,
-					elapsedTime: activity.elapsed_time,
-					averageSpeed: activity.average_speed,
-					averageHeartrate: activity.average_heartrate,
-					startDate: new Date(activity.start_date_local),
+					...activity,
 				},
-			}),
-		),
+			});
+		}),
 	);
 }
 
@@ -67,47 +64,51 @@ export async function storeDetailedActivities(
 	activities: DetailedActivity[],
 ) {
 	return Promise.all(
-		activities.map((activity) => {
-			const bestEfforts = {
-				oneKm: getBestEffortTime(activity.best_efforts, "1k"),
-				fiveKm: getBestEffortTime(activity.best_efforts, "5k"),
-				tenKm: getBestEffortTime(activity.best_efforts, "10k"),
-				halfMarathon: getBestEffortTime(activity.best_efforts, "Half-Marathon"),
-				marathon: getBestEffortTime(activity.best_efforts, "Marathon"),
+		activities.map((stravaActivity) => {
+			const activity = {
+				oneKm: getBestEffortTime(stravaActivity.best_efforts, "1k"),
+				fiveKm: getBestEffortTime(stravaActivity.best_efforts, "5k"),
+				tenKm: getBestEffortTime(stravaActivity.best_efforts, "10k"),
+				halfMarathon: getBestEffortTime(
+					stravaActivity.best_efforts,
+					"Half-Marathon",
+				),
+				marathon: getBestEffortTime(stravaActivity.best_efforts, "Marathon"),
+				name: stravaActivity.name,
+				type: stravaActivity.type,
+				distance: stravaActivity.distance,
+				movingTime: stravaActivity.moving_time,
+				elapsedTime: stravaActivity.elapsed_time,
+				averageSpeed: stravaActivity.average_speed,
+				averageHeartrate: stravaActivity.average_heartrate,
+				startDate: new Date(stravaActivity.start_date_local),
+				detailedActivity: true,
 			};
 
 			return prisma.activity.upsert({
-				where: { id: activity.id.toString() },
+				where: { id: stravaActivity.id.toString() },
 				update: {
-					name: activity.name,
-					type: activity.type,
-					distance: activity.distance,
-					movingTime: activity.moving_time,
-					elapsedTime: activity.elapsed_time,
-					averageSpeed: activity.average_speed,
-					averageHeartrate: activity.average_heartrate,
-					startDate: new Date(activity.start_date_local),
-					...bestEfforts,
+					...activity,
 				},
 				create: {
-					id: activity.id.toString(),
+					id: stravaActivity.id.toString(),
 					userId: userId,
-					name: activity.name,
-					type: activity.type,
-					distance: activity.distance,
-					movingTime: activity.moving_time,
-					elapsedTime: activity.elapsed_time,
-					averageSpeed: activity.average_speed,
-					averageHeartrate: activity.average_heartrate,
-					startDate: new Date(activity.start_date_local),
-					...bestEfforts,
+					...activity,
 				},
 			});
 		}),
 	);
 }
 
-function getBestEffortTime(bestEfforts: any[], name: string): number | null {
+interface BestEffort {
+	name: string;
+	elapsed_time: number;
+}
+
+function getBestEffortTime(
+	bestEfforts: BestEffort[],
+	name: string,
+): number | null {
 	const effort = bestEfforts.find(
 		(e) => e.name.toLowerCase() === name.toLowerCase(),
 	);

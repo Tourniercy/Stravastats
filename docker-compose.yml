@@ -1,11 +1,11 @@
 services:
-  db:
+  db-stravastats:
     image: postgres:14
     restart: always
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
-      POSTGRES_DB: mydatabase
+      POSTGRES_USER: stravastats
+      POSTGRES_PASSWORD: stravastats
+      POSTGRES_DB: stravastats
     ports:
       - "5432:5432"
     volumes:

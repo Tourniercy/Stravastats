@@ -1,9 +1,15 @@
 import type { DetailedActivity, SummaryActivity } from "@/lib/types";
 import { prisma } from "../../prisma";
 
-export async function getUserActivities(userId: string) {
+export async function getUserActivities(userId: string, detailedActivity = false) {
+	if (detailedActivity) {
+		return prisma.activity.findMany({
+			where: { userId: userId },
+			orderBy: { startDate: "desc" },
+		});
+	}
 	return prisma.activity.findMany({
-		where: { userId: userId },
+		where: { userId: userId, detailedActivity: false },
 		orderBy: { startDate: "desc" },
 	});
 }
@@ -22,7 +28,12 @@ export async function getDetailedActivity(
 			},
 		);
 
-		return await response.json();
+		if (!response.ok) {
+			return null;
+		}
+
+		const responseJson = await response.json();
+		return responseJson;
 	} catch (error) {
 		console.error("Error:", error);
 	}
@@ -65,7 +76,6 @@ export async function storeDetailedActivities(
 ) {
 	return Promise.all(
 		activities.map((stravaActivity) => {
-			console.log("best_efforts", stravaActivity.best_efforts);
 			const activity = {
 				oneKm: getBestEffortTime(stravaActivity.best_efforts, "1k"),
 				fiveKm: getBestEffortTime(stravaActivity.best_efforts, "5k"),

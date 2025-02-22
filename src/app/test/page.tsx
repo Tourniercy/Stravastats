@@ -3,7 +3,6 @@ import SignIn from "@/components/sign-in"
 
 export default async function TestPage() {
     const session = await auth()
-    console.log("Test page rendering, session:", session)
     
     return (
         <div className="p-4">

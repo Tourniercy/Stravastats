@@ -1,9 +1,26 @@
 import { prisma } from "../../prisma";
 
 export async function getAccount(userId: string) {
-	return prisma.account.findFirst({
-		where: { userId: userId, provider: "strava" },
-	});
+	try {
+		const account = await prisma.account.findFirst({
+			where: {
+				userId: userId,
+				provider: "strava",
+			},
+			orderBy: {
+				createdAt: 'desc'
+			}
+		});
+
+		if (!account) {
+			throw new Error(`No Strava account found for user ${userId}`);
+		}
+
+		return account;
+	} catch (error) {
+		console.error("Error getting account:", error);
+		return null;
+	}
 }
 
 export async function updateUserStravaTokens(
@@ -11,11 +28,11 @@ export async function updateUserStravaTokens(
 	refreshToken: string,
 	providerAccountId: string,
 ) {
-	await prisma.account.update({
+	return prisma.account.update({
 		where: {
 			provider_providerAccountId: {
 				provider: "strava",
-				providerAccountId: providerAccountId,
+				providerAccountId,
 			},
 		},
 		data: {

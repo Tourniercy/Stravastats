@@ -27,7 +27,6 @@ export const { handlers, auth, signIn } = NextAuth({
 				responseType: "code",
 			},
 			profile(profile) {
-				console.log("profile", profile);
 				return {
 					id: profile.id.toString(), // Convert id to string
 					name: profile.username,
@@ -38,11 +37,9 @@ export const { handlers, auth, signIn } = NextAuth({
 	],
 	callbacks: {
 		async session({ session }) {
-			console.log("session", session);
 			return session;
 		},
 		async signIn({ user, account, profile }) {
-			console.log("signIn", user, account, profile);
 			if (account?.provider === "strava") {
 				const stravaId = profile?.id;
 				user.email = `strava_${stravaId}@example.com`;
@@ -50,7 +47,6 @@ export const { handlers, auth, signIn } = NextAuth({
 			return true;
 		},
 		authorized: async ({ auth }) => {
-			console.log("authorized", auth);
 			return !!auth;
 		},
 	},

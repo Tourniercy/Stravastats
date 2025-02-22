@@ -1,4 +1,5 @@
 import { auth } from "@/auth";
+import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
 	Table,
@@ -9,11 +10,12 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { getAccount, updateUserStravaTokens } from "@/lib/account";
-import { getDetailedActivity, getUserActivities } from "@/lib/activity";
+import { getDetailedActivity, getUserActivities, storeDetailedActivities, storeSummaryActivities } from "@/lib/activity";
 import type { SummaryActivity } from "@/lib/types";
 import { formatDate, formatDistanceInKm, formatDuration } from "@/lib/utils";
 import type { Activity } from "@prisma/client";
 import { prisma } from "../../../prisma";
+
 
 async function refreshStravaToken(userId: string) {
 	const account = await getAccount(userId);
@@ -81,43 +83,13 @@ async function getStravaActivities(
 	return response.json();
 }
 
-async function storeActivitiesInDatabase(
-	userId: string,
-	activities: SummaryActivity[],
-) {
-	return Promise.all(
-		activities.map((activity) =>
-			prisma.activity.upsert({
-				where: { id: activity.id.toString() },
-				update: {
-					name: activity.name,
-					type: activity.type,
-					distance: activity.distance,
-					movingTime: activity.moving_time,
-					averageSpeed: activity.average_speed,
-					averageHeartrate: activity.average_heartrate,
-					elapsedTime: activity.elapsed_time,
-					startDate: new Date(activity.start_date_local),
-				},
-				create: {
-					id: activity.id.toString(),
-					userId: userId,
-					name: activity.name,
-					type: activity.type,
-					distance: activity.distance,
-					movingTime: activity.moving_time,
-					averageSpeed: activity.average_speed,
-					averageHeartrate: activity.average_heartrate,
-					elapsedTime: activity.elapsed_time,
-					startDate: new Date(activity.start_date_local),
-				},
-			}),
-		),
-	);
-}
-
 export default async function Dashboard() {
 	const session = await auth();
+	
+	if (!session?.user) {
+		redirect("/");
+	}
+
 	const userId = session?.user.id as string;
 
 	let activities = await getUserActivities(userId);
@@ -132,7 +104,7 @@ export default async function Dashboard() {
 	);
 
 	if (stravaActivities) {
-		await storeActivitiesInDatabase(userId, stravaActivities);
+		await storeSummaryActivities(userId, stravaActivities);
 	}
 
 	activities = await getUserActivities(userId);
@@ -152,7 +124,7 @@ export default async function Dashboard() {
 			(activity) => activity !== null && activity !== undefined,
 		);
 
-		await storeActivitiesInDatabase(userId, filteredActivities);
+		await storeDetailedActivities(userId, filteredActivities);
 	}
 
 	// Process activities in batches of 20

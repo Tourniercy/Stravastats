@@ -27,8 +27,9 @@ export const { handlers, auth, signIn } = NextAuth({
 				responseType: "code",
 			},
 			profile(profile) {
+				console.log("profile", profile);
 				return {
-					id: profile.id.toString(), // Convert id to string
+					id: profile.id.toString(),
 					name: profile.username,
 					image: profile.profile,
 				};
@@ -37,6 +38,7 @@ export const { handlers, auth, signIn } = NextAuth({
 	],
 	callbacks: {
 		async session({ session }) {
+			console.log("session", session);
 			return session;
 		},
 		async signIn({ user, account, profile }) {
@@ -48,6 +50,7 @@ export const { handlers, auth, signIn } = NextAuth({
 			return true;
 		},
 		authorized: async ({ auth }) => {
+			console.log("authorized", auth);
 			return !!auth;
 		},
 	},

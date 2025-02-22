@@ -109,6 +109,9 @@ function getBestEffortTime(
 	bestEfforts: BestEffort[],
 	name: string,
 ): number | null {
+	if (!bestEfforts || bestEfforts.length === 0) {
+		return null;
+	}
 	const effort = bestEfforts.find(
 		(e) => e.name.toLowerCase() === name.toLowerCase(),
 	);

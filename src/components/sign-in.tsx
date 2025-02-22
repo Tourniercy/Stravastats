@@ -1,15 +1,15 @@
+'use client'
 
-import { signIn } from "@/auth"
+import { signIn } from "next-auth/react"
 
 export default function SignIn() {
     return (
-        <form
-            action={async () => {
-                "use server"
-                await signIn('strava', { redirectTo: "/dashboard" })
-            }}
+        <button 
+            type="button"
+            onClick={() => signIn("strava")}
+            className="bg-[#FC4C02] hover:bg-[#E34402] text-white px-4 py-2 rounded"
         >
-            <button type="submit">Signin with Strava</button>
-        </form>
+            Sign in with Strava
+        </button>
     )
-}
+} 

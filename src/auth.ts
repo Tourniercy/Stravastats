@@ -29,7 +29,7 @@ export const { handlers, auth, signIn } = NextAuth({
 			profile(profile) {
 				console.log("profile", profile);
 				return {
-					id: profile.id.toString(),
+					id: profile.id.toString(), // Convert id to string
 					name: profile.username,
 					image: profile.profile,
 				};

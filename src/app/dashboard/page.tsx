@@ -19,6 +19,7 @@ import { prisma } from "../../../prisma";
 
 async function refreshStravaToken(userId: string) {
 	const account = await getAccount(userId);
+	console.log("account", account);
 
 	if (!account?.refresh_token) {
 		throw new Error("No refresh token found");
@@ -66,8 +67,7 @@ async function getStravaActivities(
 		const lastActivityTimestamp = lastActivityDate.getTime();
 		url = `https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1&after=${lastActivityTimestamp}`;
 	} else {
-		url =
-			"https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1";
+		url = "https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1";
 	}
 	const response = await fetch(url, {
 		headers: {
@@ -75,12 +75,16 @@ async function getStravaActivities(
 		},
 	});
 
-	if (!response.ok) {
-		// await refreshStravaToken(userId);
-		return await getStravaActivities(accessToken, userId);
+	const responseJson = await response.json();
+
+	console.log("responseJson", responseJson);
+
+	if (!response.ok || responseJson.message === 'Authorization Error') {
+		const newTokenData = await refreshStravaToken(userId);
+		return getStravaActivities(newTokenData.access_token, userId, lastActivityDate);
 	}
 
-	return response.json();
+	return responseJson;
 }
 
 export default async function Dashboard() {
@@ -95,6 +99,7 @@ export default async function Dashboard() {
 	let activities = await getUserActivities(userId);
 
 	const data = await refreshStravaToken(userId);
+
 	const accessToken = data.access_token;
 	const stravaUserId = data.stravaUserId;
 	const stravaActivities = await getStravaActivities(
@@ -102,6 +107,8 @@ export default async function Dashboard() {
 		stravaUserId,
 		activities?.[0]?.startDate,
 	);
+
+	console.log("stravaActivities", stravaActivities);
 
 	if (stravaActivities) {
 		await storeSummaryActivities(userId, stravaActivities);
@@ -123,6 +130,8 @@ export default async function Dashboard() {
 		const filteredActivities = detailedActivities.filter(
 			(activity) => activity !== null && activity !== undefined,
 		);
+
+		console.log("filteredActivities", filteredActivities[0].best_efforts);
 
 		await storeDetailedActivities(userId, filteredActivities);
 	}

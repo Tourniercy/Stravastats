@@ -65,6 +65,7 @@ export async function storeDetailedActivities(
 ) {
 	return Promise.all(
 		activities.map((stravaActivity) => {
+			console.log("best_efforts", stravaActivity.best_efforts);
 			const activity = {
 				oneKm: getBestEffortTime(stravaActivity.best_efforts, "1k"),
 				fiveKm: getBestEffortTime(stravaActivity.best_efforts, "5k"),

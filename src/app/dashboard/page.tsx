@@ -63,7 +63,6 @@ async function refreshStravaToken(userId: string) {
 }
 async function getStravaActivities(
 	accessToken: string,
-	userId: string,
 	lastActivityDate?: Date,
 ) {
 	console.log("accessToken", accessToken);
@@ -97,8 +96,6 @@ async function getStravaActivities(
 }
 
 export default async function Dashboard() {
-	// Await headers before auth check
-	await headers()
 	const session = await auth()
 	
 	if (!session?.user) {
@@ -111,10 +108,8 @@ export default async function Dashboard() {
 	const data = await refreshStravaToken(userId)
 
 	const accessToken = data.access_token
-	const stravaUserId = data.stravaUserId
 	const stravaActivities = await getStravaActivities(
 		accessToken,
-		stravaUserId,
 		activities?.[0]?.startDate,
 	)
 

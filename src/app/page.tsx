@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
 export default async function Home() {
-    await headers()
     const session = await auth();
 
     if (session?.user) {

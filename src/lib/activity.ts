@@ -1,15 +1,13 @@
 import type { DetailedActivity, SummaryActivity } from "@/lib/types";
 import { prisma } from "../../prisma";
 
-export async function getUserActivities(userId: string, detailedActivity = false) {
-	if (detailedActivity) {
-		return prisma.activity.findMany({
-			where: { userId: userId },
-			orderBy: { startDate: "desc" },
-		});
-	}
+export async function getUserActivities(userId: string, detailedOnly = false) {
+	const whereClause = detailedOnly 
+		? { userId: userId, detailedActivity: true }
+		: { userId: userId };
+		
 	return prisma.activity.findMany({
-		where: { userId: userId, detailedActivity: false },
+		where: whereClause,
 		orderBy: { startDate: "desc" },
 	});
 }
@@ -43,31 +41,45 @@ export async function storeSummaryActivities(
 	userId: string,
 	activities: SummaryActivity[],
 ) {
-	return Promise.all(
-		activities.map((stravaActivity) => {
-			const activity = {
-				name: stravaActivity.name,
-				type: stravaActivity.type,
-				distance: stravaActivity.distance,
-				movingTime: stravaActivity.moving_time,
-				elapsedTime: stravaActivity.elapsed_time,
-				averageSpeed: stravaActivity.average_speed,
-				averageHeartrate: stravaActivity.average_heartrate,
-				startDate: new Date(stravaActivity.start_date_local),
-			};
-			return prisma.activity.upsert({
-				where: { id: stravaActivity.id.toString() },
-				update: {
-					...activity,
-				},
-				create: {
-					id: stravaActivity.id.toString(),
-					userId: userId,
-					...activity,
-				},
-			});
-		}),
-	);
+	console.log(`storeSummaryActivities: Processing ${activities.length} activities for user ${userId}`);
+	
+	try {
+		const results = await Promise.all(
+			activities.map(async (stravaActivity) => {
+				const activity = {
+					name: stravaActivity.name,
+					type: stravaActivity.type,
+					distance: stravaActivity.distance,
+					movingTime: stravaActivity.moving_time,
+					elapsedTime: stravaActivity.elapsed_time,
+					averageSpeed: stravaActivity.average_speed,
+					averageHeartrate: stravaActivity.average_heartrate,
+					startDate: new Date(stravaActivity.start_date_local),
+					detailedActivity: false,
+				};
+				
+				console.log(`Upserting activity ${stravaActivity.id} for user ${userId}`);
+				
+				return prisma.activity.upsert({
+					where: { id: stravaActivity.id.toString() },
+					update: {
+						...activity,
+					},
+					create: {
+						id: stravaActivity.id.toString(),
+						userId: userId,
+						...activity,
+					},
+				});
+			}),
+		);
+		
+		console.log(`storeSummaryActivities: Successfully processed ${results.length} activities`);
+		return results;
+	} catch (error) {
+		console.error("Error in storeSummaryActivities:", error);
+		throw error;
+	}
 }
 
 export async function storeDetailedActivities(

@@ -84,7 +84,7 @@ export default function ActivityFetcher({ onComplete }: ActivityFetcherProps) {
 
 	const getStatusIcon = () => {
 		if (!progress) return null;
-		
+
 		switch (progress.type) {
 			case "progress":
 				return isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null;
@@ -99,7 +99,7 @@ export default function ActivityFetcher({ onComplete }: ActivityFetcherProps) {
 
 	const getProgressColor = () => {
 		if (!progress) return "";
-		
+
 		switch (progress.type) {
 			case "complete":
 				return "bg-green-500";
@@ -138,15 +138,17 @@ export default function ActivityFetcher({ onComplete }: ActivityFetcherProps) {
 					{progress && (
 						<div className="space-y-2">
 							<div className="flex items-center justify-between text-sm">
-								<span className={progress.type === "error" ? "text-red-600" : ""}>
+								<span
+									className={progress.type === "error" ? "text-red-600" : ""}
+								>
 									{progress.message}
 								</span>
 								<span className="text-muted-foreground">
 									{progress.progress}%
 								</span>
 							</div>
-							<Progress 
-								value={progress.progress} 
+							<Progress
+								value={progress.progress}
 								className="w-full"
 								color={getProgressColor()}
 							/>

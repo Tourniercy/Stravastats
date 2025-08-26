@@ -1,5 +1,9 @@
 import { auth } from "@/auth";
-import { getAccount, updateUserStravaTokens } from "@/lib/account";
+import {
+	getAccount,
+	isTokenValid,
+	updateUserStravaTokens,
+} from "@/lib/account";
 import {
 	getDetailedActivity,
 	getUserActivities,
@@ -22,7 +26,9 @@ async function refreshStravaToken(userId: string) {
 				"Content-Type": "application/x-www-form-urlencoded",
 			},
 			body: new URLSearchParams({
+				// biome-ignore lint/style/noNonNullAssertion: <explanation>
 				client_id: process.env.AUTH_STRAVA_ID!,
+				// biome-ignore lint/style/noNonNullAssertion: <explanation>
 				client_secret: process.env.AUTH_STRAVA_SECRET!,
 				grant_type: "refresh_token",
 				refresh_token: account.refresh_token,
@@ -73,10 +79,27 @@ async function getStravaActivities(
 	const responseJson = await response.json();
 
 	if (!response.ok) {
-		return null;
+		return { error: true, status: response.status, data: responseJson };
 	}
 
-	return responseJson;
+	return { error: false, data: responseJson };
+}
+
+async function getValidAccessToken(userId: string): Promise<string> {
+	const account = await getAccount(userId);
+
+	if (!account) {
+		throw new Error(`No Strava account found for user ${userId}`);
+	}
+
+	// Check if current token is valid
+	if (isTokenValid(account)) {
+		return account.access_token as string;
+	}
+
+	// Token is expired or missing, refresh it
+	const tokenData = await refreshStravaToken(userId);
+	return tokenData.access_token;
 }
 
 export async function GET() {
@@ -106,8 +129,7 @@ export async function GET() {
 				);
 
 				const activities = await getUserActivities(userId);
-				const tokenData = await refreshStravaToken(userId);
-				const accessToken = tokenData.access_token;
+				let accessToken = await getValidAccessToken(userId);
 
 				// Step 2: Fetch new activities from Strava
 				controller.enqueue(
@@ -120,16 +142,36 @@ export async function GET() {
 					),
 				);
 
-				const stravaActivities = await getStravaActivities(
+				let stravaActivitiesResult = await getStravaActivities(
 					accessToken,
 					activities?.[0]?.startDate,
 				);
 
-				if (stravaActivities) {
-					console.log(`Storing ${stravaActivities.length} summary activities for user ${userId}`);
+				// Retry with refreshed token if we got 401/403
+				if (
+					stravaActivitiesResult.error &&
+					(stravaActivitiesResult.status === 401 ||
+						stravaActivitiesResult.status === 403)
+				) {
+					console.log("Token expired, refreshing and retrying...");
+					const tokenData = await refreshStravaToken(userId);
+					accessToken = tokenData.access_token;
+					stravaActivitiesResult = await getStravaActivities(
+						accessToken,
+						activities?.[0]?.startDate,
+					);
+				}
+
+				if (!stravaActivitiesResult.error && stravaActivitiesResult.data) {
+					const stravaActivities = stravaActivitiesResult.data;
+					console.log(
+						`Storing ${stravaActivities.length} summary activities for user ${userId}`,
+					);
 					try {
 						await storeSummaryActivities(userId, stravaActivities);
-						console.log(`Successfully stored ${stravaActivities.length} summary activities`);
+						console.log(
+							`Successfully stored ${stravaActivities.length} summary activities`,
+						);
 						controller.enqueue(
 							encoder.encode(
 								`data: ${JSON.stringify({
@@ -202,10 +244,14 @@ export async function GET() {
 					);
 
 					if (filteredActivities.length > 0) {
-						console.log(`Storing ${filteredActivities.length} detailed activities for batch`);
+						console.log(
+							`Storing ${filteredActivities.length} detailed activities for batch`,
+						);
 						try {
 							await storeDetailedActivities(userId, filteredActivities);
-							console.log(`Successfully stored ${filteredActivities.length} detailed activities`);
+							console.log(
+								`Successfully stored ${filteredActivities.length} detailed activities`,
+							);
 						} catch (error) {
 							console.error("Error storing detailed activities:", error);
 							throw error;
@@ -216,10 +262,10 @@ export async function GET() {
 				for (let i = 0; i < nonDetailedActivities.length; i += batchSize) {
 					const batch = nonDetailedActivities.slice(i, i + batchSize);
 					await processActivitiesBatch(batch);
-					
+
 					processed += batch.length;
 					const progress = Math.round(25 + (processed / totalActivities) * 70);
-					
+
 					controller.enqueue(
 						encoder.encode(
 							`data: ${JSON.stringify({
@@ -249,7 +295,8 @@ export async function GET() {
 					encoder.encode(
 						`data: ${JSON.stringify({
 							type: "error",
-							message: error instanceof Error ? error.message : "An error occurred",
+							message:
+								error instanceof Error ? error.message : "An error occurred",
 							progress: 0,
 						})}\n\n`,
 					),

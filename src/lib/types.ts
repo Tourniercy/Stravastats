@@ -13,10 +13,8 @@ export type SummaryActivity = {
 export type BestEffort = {
 	name: string;
 	elapsed_time: number;
-}
+};
 
 export type DetailedActivity = SummaryActivity & {
-	best_efforts: [
-		BestEffort
-	];
+	best_efforts: [BestEffort];
 };

@@ -2,10 +2,10 @@ import type { DetailedActivity, SummaryActivity } from "@/lib/types";
 import { prisma } from "../../prisma";
 
 export async function getUserActivities(userId: string, detailedOnly = false) {
-	const whereClause = detailedOnly 
+	const whereClause = detailedOnly
 		? { userId: userId, detailedActivity: true }
 		: { userId: userId };
-		
+
 	return prisma.activity.findMany({
 		where: whereClause,
 		orderBy: { startDate: "desc" },
@@ -15,7 +15,7 @@ export async function getUserActivities(userId: string, detailedOnly = false) {
 export async function getDetailedActivity(
 	activityId: string,
 	token: string,
-): Promise<Promise<DetailedActivity> | null | undefined> {
+): Promise<DetailedActivity | null> {
 	try {
 		const response = await fetch(
 			`https://www.strava.com/api/v3/activities/${activityId}`,
@@ -27,6 +27,9 @@ export async function getDetailedActivity(
 		);
 
 		if (!response.ok) {
+			console.log(
+				`Failed to fetch activity ${activityId}: ${response.statusText}`,
+			);
 			return null;
 		}
 
@@ -34,6 +37,7 @@ export async function getDetailedActivity(
 		return responseJson;
 	} catch (error) {
 		console.error("Error:", error);
+		return null;
 	}
 }
 
@@ -41,8 +45,10 @@ export async function storeSummaryActivities(
 	userId: string,
 	activities: SummaryActivity[],
 ) {
-	console.log(`storeSummaryActivities: Processing ${activities.length} activities for user ${userId}`);
-	
+	console.log(
+		`storeSummaryActivities: Processing ${activities.length} activities for user ${userId}`,
+	);
+
 	try {
 		const results = await Promise.all(
 			activities.map(async (stravaActivity) => {
@@ -57,9 +63,11 @@ export async function storeSummaryActivities(
 					startDate: new Date(stravaActivity.start_date_local),
 					detailedActivity: false,
 				};
-				
-				console.log(`Upserting activity ${stravaActivity.id} for user ${userId}`);
-				
+
+				console.log(
+					`Upserting activity ${stravaActivity.id} for user ${userId}`,
+				);
+
 				return prisma.activity.upsert({
 					where: { id: stravaActivity.id.toString() },
 					update: {
@@ -73,8 +81,10 @@ export async function storeSummaryActivities(
 				});
 			}),
 		);
-		
-		console.log(`storeSummaryActivities: Successfully processed ${results.length} activities`);
+
+		console.log(
+			`storeSummaryActivities: Successfully processed ${results.length} activities`,
+		);
 		return results;
 	} catch (error) {
 		console.error("Error in storeSummaryActivities:", error);

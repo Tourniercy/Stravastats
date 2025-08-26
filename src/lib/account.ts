@@ -8,8 +8,8 @@ export async function getAccount(userId: string) {
 				provider: "strava",
 			},
 			orderBy: {
-				createdAt: 'desc'
-			}
+				createdAt: "desc",
+			},
 		});
 
 		if (!account) {
@@ -40,4 +40,22 @@ export async function updateUserStravaTokens(
 			refresh_token: refreshToken,
 		},
 	});
+}
+
+export function isTokenValid(account: {
+	access_token?: string | null;
+	expires_at?: number | null;
+}) {
+	if (!account.access_token) {
+		return false;
+	}
+
+	if (!account.expires_at) {
+		// If no expiration time, assume token is still valid
+		return true;
+	}
+
+	// Check if token expires in the next 5 minutes (300 seconds buffer)
+	const now = Math.floor(Date.now() / 1000);
+	return account.expires_at > now + 300;
 }

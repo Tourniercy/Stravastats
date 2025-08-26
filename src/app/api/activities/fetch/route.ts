@@ -1,105 +1,32 @@
 import { auth } from "@/auth";
 import {
-	getAccount,
-	isTokenValid,
-	updateUserStravaTokens,
-} from "@/lib/account";
-import {
 	getDetailedActivity,
 	getUserActivities,
 	storeDetailedActivities,
 	storeSummaryActivities,
 } from "@/lib/activity";
+import { logRateLimitStatus } from "@/lib/rate-limit-monitor";
+import { type StravaApiResponse, stravaApi } from "@/lib/strava-api-wrapper";
+import type { SummaryActivity } from "@/lib/types";
 import type { Activity } from "@prisma/client";
 
-async function refreshStravaToken(userId: string) {
-	const account = await getAccount(userId);
-
-	if (!account?.refresh_token) {
-		throw new Error(`No refresh token found for user ${userId}`);
-	}
-
-	try {
-		const response = await fetch("https://www.strava.com/api/v3/oauth/token", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/x-www-form-urlencoded",
-			},
-			body: new URLSearchParams({
-				// biome-ignore lint/style/noNonNullAssertion: <explanation>
-				client_id: process.env.AUTH_STRAVA_ID!,
-				// biome-ignore lint/style/noNonNullAssertion: <explanation>
-				client_secret: process.env.AUTH_STRAVA_SECRET!,
-				grant_type: "refresh_token",
-				refresh_token: account.refresh_token,
-			}),
-		});
-
-		if (!response.ok) {
-			throw new Error(`Failed to refresh token: ${response.statusText}`);
-		}
-
-		const data = await response.json();
-
-		if (!data.access_token || !data.refresh_token) {
-			throw new Error("Invalid token response from Strava");
-		}
-
-		await updateUserStravaTokens(
-			data.access_token,
-			data.refresh_token,
-			account.providerAccountId,
-		);
-
-		return { ...data, stravaUserId: account.providerAccountId };
-	} catch (error) {
-		console.error("Error refreshing token:", error);
-		throw error;
-	}
-}
-
-async function getStravaActivities(
-	accessToken: string,
-	lastActivityDate?: Date,
-) {
+async function getStravaActivities(userId: string, lastActivityDate?: Date) {
 	const timestamp = lastActivityDate
 		? Math.floor((lastActivityDate.getTime() - 48 * 60 * 60 * 1000) / 1000)
 		: undefined;
 
-	const url = timestamp
-		? `https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1&after=${timestamp}`
-		: "https://www.strava.com/api/v3/athlete/activities?per_page=200&page=1";
+	const params: Record<string, number> = {
+		per_page: 200,
+		page: 1,
+	};
 
-	const response = await fetch(url, {
-		headers: {
-			Authorization: `Bearer ${accessToken}`,
-		},
-	});
-
-	const responseJson = await response.json();
-
-	if (!response.ok) {
-		return { error: true, status: response.status, data: responseJson };
+	if (timestamp) {
+		params.after = timestamp;
 	}
 
-	return { error: false, data: responseJson };
-}
-
-async function getValidAccessToken(userId: string): Promise<string> {
-	const account = await getAccount(userId);
-
-	if (!account) {
-		throw new Error(`No Strava account found for user ${userId}`);
-	}
-
-	// Check if current token is valid
-	if (isTokenValid(account)) {
-		return account.access_token as string;
-	}
-
-	// Token is expired or missing, refresh it
-	const tokenData = await refreshStravaToken(userId);
-	return tokenData.access_token;
+	return (await stravaApi.getActivities(userId, params)) as StravaApiResponse<
+		SummaryActivity[]
+	>;
 }
 
 export async function GET() {
@@ -129,7 +56,6 @@ export async function GET() {
 				);
 
 				const activities = await getUserActivities(userId);
-				let accessToken = await getValidAccessToken(userId);
 
 				// Step 2: Fetch new activities from Strava
 				controller.enqueue(
@@ -142,28 +68,14 @@ export async function GET() {
 					),
 				);
 
-				let stravaActivitiesResult = await getStravaActivities(
-					accessToken,
+				const stravaActivitiesResult = await getStravaActivities(
+					userId,
 					activities?.[0]?.startDate,
 				);
 
-				// Retry with refreshed token if we got 401/403
-				if (
-					stravaActivitiesResult.error &&
-					(stravaActivitiesResult.status === 401 ||
-						stravaActivitiesResult.status === 403)
-				) {
-					console.log("Token expired, refreshing and retrying...");
-					const tokenData = await refreshStravaToken(userId);
-					accessToken = tokenData.access_token;
-					stravaActivitiesResult = await getStravaActivities(
-						accessToken,
-						activities?.[0]?.startDate,
-					);
-				}
-
 				if (!stravaActivitiesResult.error && stravaActivitiesResult.data) {
-					const stravaActivities = stravaActivitiesResult.data;
+					const stravaActivities =
+						stravaActivitiesResult.data as SummaryActivity[];
 					console.log(
 						`Storing ${stravaActivities.length} summary activities for user ${userId}`,
 					);
@@ -233,7 +145,7 @@ export async function GET() {
 					const detailedActivities = await Promise.all(
 						batch.map(async (activity) => {
 							if (!activity.detailedActivity) {
-								return getDetailedActivity(activity.id, accessToken);
+								return getDetailedActivity(activity.id, userId);
 							}
 							return null;
 						}),
@@ -277,7 +189,9 @@ export async function GET() {
 					);
 				}
 
-				// Step 5: Complete
+				// Step 5: Log rate limit status and complete
+				logRateLimitStatus();
+
 				controller.enqueue(
 					encoder.encode(
 						`data: ${JSON.stringify({

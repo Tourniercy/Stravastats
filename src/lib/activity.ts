@@ -1,3 +1,4 @@
+import { stravaApi } from "@/lib/strava-api-wrapper";
 import type { DetailedActivity, SummaryActivity } from "@/lib/types";
 import { prisma } from "../../prisma";
 
@@ -14,27 +15,19 @@ export async function getUserActivities(userId: string, detailedOnly = false) {
 
 export async function getDetailedActivity(
 	activityId: string,
-	token: string,
+	userId: string,
 ): Promise<DetailedActivity | null> {
 	try {
-		const response = await fetch(
-			`https://www.strava.com/api/v3/activities/${activityId}`,
-			{
-				headers: {
-					Authorization: `Bearer ${token}`,
-				},
-			},
-		);
+		const result = await stravaApi.getActivity(userId, activityId);
 
-		if (!response.ok) {
+		if (result.error) {
 			console.log(
-				`Failed to fetch activity ${activityId}: ${response.statusText}`,
+				`Failed to fetch activity ${activityId}: ${result.errorMessage || result.status}`,
 			);
 			return null;
 		}
 
-		const responseJson = await response.json();
-		return responseJson;
+		return result.data as DetailedActivity;
 	} catch (error) {
 		console.error("Error:", error);
 		return null;

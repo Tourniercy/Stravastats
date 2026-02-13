@@ -10,8 +10,17 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { formatDate, formatDistanceInKm, formatDuration } from "@/lib/utils";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { ColumnDef, SortingFn } from "@tanstack/react-table";
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
+
+const nullsLastSort: SortingFn<Activity> = (rowA, rowB, columnId) => {
+	const a = rowA.getValue(columnId) as number | null;
+	const b = rowB.getValue(columnId) as number | null;
+	if (a == null && b == null) return 0;
+	if (a == null) return 1;
+	if (b == null) return -1;
+	return a - b;
+};
 
 export type Activity = {
 	id: string;
@@ -183,6 +192,7 @@ export const columns: ColumnDef<Activity>[] = [
 	},
 	{
 		accessorKey: "oneKm",
+		sortingFn: nullsLastSort,
 		header: ({ column }) => {
 			return (
 				<div className="text-right">
@@ -207,6 +217,7 @@ export const columns: ColumnDef<Activity>[] = [
 	},
 	{
 		accessorKey: "fiveKm",
+		sortingFn: nullsLastSort,
 		header: ({ column }) => {
 			return (
 				<div className="text-right">
@@ -222,6 +233,31 @@ export const columns: ColumnDef<Activity>[] = [
 		},
 		cell: ({ row }) => {
 			const time = row.getValue("fiveKm") as number | null;
+			return (
+				<div className="text-right font-medium">
+					{time ? formatDuration(time) : "N/A"}
+				</div>
+			);
+		},
+	},
+	{
+		accessorKey: "tenKm",
+		sortingFn: nullsLastSort,
+		header: ({ column }) => {
+			return (
+				<div className="text-right">
+					<Button
+						variant="ghost"
+						onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+					>
+						10K Best
+						<ArrowUpDown className="ml-2 h-4 w-4" />
+					</Button>
+				</div>
+			);
+		},
+		cell: ({ row }) => {
+			const time = row.getValue("tenKm") as number | null;
 			return (
 				<div className="text-right font-medium">
 					{time ? formatDuration(time) : "N/A"}

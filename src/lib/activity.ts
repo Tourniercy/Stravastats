@@ -4,8 +4,8 @@ import { prisma } from "../../prisma";
 
 export async function getUserActivities(userId: string, detailedOnly = false) {
 	const whereClause = detailedOnly
-		? { userId: userId, detailedActivity: true }
-		: { userId: userId };
+		? { userId: userId, type: "Run", detailedActivity: true }
+		: { userId: userId, type: "Run" };
 
 	return prisma.activity.findMany({
 		where: whereClause,

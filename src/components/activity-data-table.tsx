@@ -47,8 +47,6 @@ export function ActivityDataTable<TData, TValue>({
 	const [columnVisibility, setColumnVisibility] =
 		React.useState<VisibilityState>({
 			elapsedTime: false,
-			oneKm: false,
-			fiveKm: false,
 			actions: false,
 		});
 

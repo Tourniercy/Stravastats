@@ -10,7 +10,7 @@
 		"prepare": "husky"
 	},
 	"dependencies": {
-		"@auth/core": "^0.40.0",
+		"@auth/core": "^0.41.3",
 		"@auth/prisma-adapter": "^2.11.1",
 		"@prisma/adapter-pg": "^6.19.2",
 		"@prisma/client": "^6.19.2",
